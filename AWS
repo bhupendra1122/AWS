@@ -1,0 +1,342 @@
+
+
+/* ESP8266 AWS IoT
+ *  
+ *Title: AWS Public code
+ * Author: BHUPENDRA KUMAR GUPTA
+ * License: Apache License v2
+ */
+#include <ESP8266WiFi.h>
+#include <PubSubClient.h>
+extern "C" {
+#include "libb64/cdecode.h"
+}
+
+const int LM_35 = A0;  
+int input_val = 0;
+float temp = 0;         
+
+
+const char* ssid = "Bhupendra";
+const char* password = "12345678";
+const char* awsEndpoint = "a22p71xzpwvplk-ats.iot.us-west-2.amazonaws.com";
+const String Dev_Certificate = \
+//-----BEGIN CERTIFICATE-----
+"MIIDWTCCAkGgAwIBAgIUPHqqsBKlQye9B1UPDH4XR0aq7BAwDQYJKoZIhvcNAQEL" \
+"BQAwTTFLMEkGA1UECwxCQW1hem9uIFdlYiBTZXJ2aWNlcyBPPUFtYXpvbi5jb20g" \
+"SW5jLiBMPVNlYXR0bGUgU1Q9V2FzaGluZ3RvbiBDPVVTMB4XDTE4MTEwNzA3MzQ1" \
+"MFoXDTQ5MTIzMTIzNTk1OVowHjEcMBoGA1UEAwwTQVdTIElvVCBDZXJ0aWZpY2F0" \
+"ZTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAPVRovFkag3qAx8HP+0r" \
+"bWbXRR+e6nWPBfhlEQn0zHv+bdjekgZ4ecKgSRFKFwaHj1lZU9KTwKAj5MDWbEOn" \
+"y024Ucvd5/upEG7FDLB+ri2Xre7EO9O51n7/+bnFbdhdQQ2TDgFsQXRPf/JQnpGd" \
+"g0po60i2FNk/IRSFZXKUXV1364K9dsvsyexhznbtAY1HNZ51rFFbmKiPW3Bi4Tqq" \
+"QdO/5cXaBmCdWzsUhVuDXrGL7VVqNfknUCm+HFwwTF6tJR1xzn64q2kOlTnz2ARF" \
+"cSzZBnnzJFTxRO4X069ELMcnaw+tBH0Dpnr2SoozIYbJhYcvqo00z0x2YYppFWlj" \
+"UwUCAwEAAaNgMF4wHwYDVR0jBBgwFoAUMy1v03nkT4F3S5JRpu7hGsf7DIEwHQYD" \
+"VR0OBBYEFNCy6pZHJ5e2CiHEySOKUBe4TX05MAwGA1UdEwEB/wQCMAAwDgYDVR0P" \
+"AQH/BAQDAgeAMA0GCSqGSIb3DQEBCwUAA4IBAQAtmPQIXo/QheumNeMJ4pIMw5BQ" \
+"3S5W7ii+JWRk4XqoldaFxZ7+WoFa9zmFqsNizDgKb4U9DQ8NpmNfPW/SV7J8WLDW" \
+"WGmmRu4a19tnwyAZyMJjkQ8D1IDtvtTtb86l9L17Q7UBhFkhlGwMh7Cxb91t2ZRT" \
+"nL2owKjQhD5hSDkVtWbPaCvXFxMrTp2Gr31qoEEa1z5msUj2BA0KiZuOz1jHlHIX" \
+"Sag5ejDBmYQnREqsrih77XcRgElamu8HsvtcJ73ICj8Jm9zBc34uJIXuBMBdArYB" \
+"AvjaONQC6znUHsvQ+87u2GIG67Cf5ayax+exarU3NprPUTwCMl4RB+sLVwhF";
+//-----END CERTIFICATE-----
+
+const String Key_private = \
+//-----BEGIN RSA PRIVATE KEY-----
+"MIIEowIBAAKCAQEA9VGi8WRqDeoDHwc/7SttZtdFH57qdY8F+GURCfTMe/5t2N6S" \
+"Bnh5wqBJEUoXBoePWVlT0pPAoCPkwNZsQ6fLTbhRy93n+6kQbsUMsH6uLZet7sQ7" \
+"07nWfv/5ucVt2F1BDZMOAWxBdE9/8lCekZ2DSmjrSLYU2T8hFIVlcpRdXXfrgr12" \
+"y+zJ7GHOdu0BjUc1nnWsUVuYqI9bcGLhOqpB07/lxdoGYJ1bOxSFW4NesYvtVWo1" \
+"+SdQKb4cXDBMXq0lHXHOfriraQ6VOfPYBEVxLNkGefMkVPFE7hfTr0QsxydrD60E" \
+"fQOmevZKijMhhsmFhy+qjTTPTHZhimkVaWNTBQIDAQABAoIBABy4vyQWBpi0ckMa" \
+"vTBOalOlFpG6MGctJJzNcG5C/AH0avX+MQiS6GaSD5v3mbSJAI6Md9TquZ3GNg0h" \
+"zbEqHxJtZx5AT93WEHd3mKG9YzUxUgrnbL3AP03FOH64j8DKQkiNlBE0lIFCoY9E" \
+"Qxx3XZzDpfBwaQZ6bqwRZixBFKFRo09akfBNmjZib2pPBRr/xcdmMh+r7N1b9rk7" \
+"GiJz/Xkq+Llb2w3c4kYbZVUVDMeGYUHrkXJOg9OtlahimCCpDYbSHjwhkWZcLwaE" \
+"fk/025Vw9BFb4BlD/myNBIwrpawFnrkh5n7j/tvdNhph6GiXLUWsr+mmeHmYIaQ0" \
+"8TiESi0CgYEA/ylnT3WmGTlmTQ+cFrielHdYlILlW3UQJKvVLghjvk3IbPQqzqz5" \
+"bFMtEVMGiB0YMmLsKQwHOHyFRBITrVfptS14xfUR3Dg/V0nwRR8QwPV9vyeKZy8o" \
+"I1tBsMVlXsU3SR7wd5lN35lCGRZjHiXcHxDJq49psX0FXyjdK81JbVsCgYEA9h/0" \
+"dHHiHV2EK4iqUX2ERTrdpqypqwZtoOQwK1IZrOOal0TnSctUqAqllBz10ds+n1hs" \
+"p98lsXGWWizxiBBMp/WW+bdEM6a7HFmo3QxE4pXkOEOyl0Zpjeu8cWmDdcWBrHmS" \
+"5DWaBs+vY8/UUvfHVjgknezMadgYhVKL9wpATx8CgYAuSORklYK7sJ3N/LbjqDmb" \
+"1MpMpjHUlTeIb2MMJplxO8rPeLsLInVcIPpb2iOlLSHmges0xunIZU4HOwA2wWuz" \
+"Ybw2rG3A9LMIsnDTGP+BAQb+Vb3VWch+IV+ZITVyK3QL34DfMP/fP32t71GrdlKn" \
+"j/QFGs6hU3xV9qOn/mUDYQKBgAHXF1LPjys9CcHxkaRuVdDWsdWPMO2QbL1pN1r7" \
+"kCmUwhEjeL86f/WJrtc+qC/bfcpfNODEcFm1SbR+5Ydo58nRskFHt4DTXE7H9NVC" \
+"RDmVeVFaYDl1U1C2VIBck5kL0v5hIlIGfJJUdzE92o6MP7dLUCrGHHkmHnjQty8v" \
+"qm9tAoGBAJ9hq5/MI7F2FuAVurdyS5DI20+hsI4GgAlN/xtIBSvjIXo0rhYhPYFY" \
+"AZxW/rSeOgwpgNsIa07aoPEXfoExbpRwQqHXXKrFNP4HZNMqReHIbMU2iV8F+euQ" \
+"Mk8W0k81jjV/+eaweAhNEMWw+eBmm263SVkvKi2ezf8bfjykAm6Z";
+//-----END RSA PRIVATE KEY-----
+
+
+WiFiClientSecure wifi;
+
+
+void msgReceived(char* topic, byte* payload, unsigned int len); //bhupii our own fxn may be call back not dem sure
+
+PubSubClient wifi_pubsub(awsEndpoint, 8883, msgReceived, wifi); //bhupii mqtt client
+
+void setup() {
+
+
+ pinMode(LED_BUILTIN, OUTPUT);
+
+ digitalWrite(LED_BUILTIN, HIGH);
+  //********************************WIFI connection******************************
+  Serial.begin(115200); Serial.println();
+  Serial.println("ESP8266 AWS IoT Example");
+  Serial.print("Connecting to "); Serial.print(ssid);
+  WiFi.begin(ssid, password); //wifi going to start ..bhupii
+  WiFi.waitForConnectResult();
+  Serial.print(", WiFi connected, IP address: "); Serial.println(WiFi.localIP()); // wifi ke liye comman use tihis as reference
+
+    
+  //****************************DEVICE CERTIFICATE**********************************
+  int x_length=Dev_Certificate.length() * 3 / 4;
+  Serial.print("\nX length: ");Serial.print(x_length);
+  uint8_t binary_certificate_arr[Dev_Certificate.length() * 3 / 4]; // creating array of bhupii .. certificate  .
+  int len = b64decode(Dev_Certificate, binary_certificate_arr);
+  Serial.print("\nlengthx len: ");Serial.print(len);
+  wifi.setCertificate(binary_certificate_arr, len); // method fo pubsubclient.h
+
+  //******************************PRIVATE KEY**************************************
+  int k_length=Key_private.length() * 3 / 4;
+  Serial.print("\nk length: ");Serial.print(k_length);
+  uint8_t binaryPrivate[Key_private.length() * 3 / 4];
+  len = b64decode(Key_private, binaryPrivate);
+  Serial.print("\nlength in y len: ");Serial.print(len);
+  wifi.setPrivateKey(binaryPrivate, len);
+}
+
+unsigned long lastPublish;
+int msgCount;
+void loop() {
+
+   input_val = analogRead(LM_35);
+   temp = (5.0 * input_val * 100.0) / 1024; 
+  // Serial.print("Temperature is : " );                       
+   //Serial.println(temp);
+   delay(1000);       
+
+  pubSubCheckConnect();
+
+  if (millis() - lastPublish > 15000) {
+Serial.print("Temp check... :");Serial.println(temp);
+    if(temp>60){
+    String msg = String("FIRE") + ++msgCount;
+    wifi_pubsub.publish("my_esp8266_policy", msg.c_str());
+    Serial.print("Published: "); 
+    Serial.println(msg);
+    lastPublish = millis();
+  }}
+}
+
+
+//**********************************Fxns defination*****************************************************
+//void callback(const char[] topic, byte* payload, unsigned int length)
+void msgReceived(char* topic, byte* payload, unsigned int length) {
+
+  for (int i = 0; i < length; i++) {
+   Serial.print((char)payload[i]);
+   
+  }
+
+
+}
+//**********
+void pubSubCheckConnect() {
+  if ( ! wifi_pubsub.connected()) {
+    Serial.print("wifi_pubsub connecting to: "); Serial.print(awsEndpoint);
+    while ( ! wifi_pubsub.connected()) {
+      Serial.print(".");
+      wifi_pubsub.connect("ESPthing");
+    }
+    Serial.println(" connected");
+  //  wifi_pubsub.subscribe("my_esp8266_policy");// subscribe to a topic
+  
+  }
+  wifi_pubsub.loop();
+}
+//*********
+
+int b64decode(String b64Text, uint8_t* output) {
+  base64_decodestate s;
+  base64_init_decodestate(&s);
+  int cnt = base64_decode_block(b64Text.c_str(), b64Text.length(), (char*)output, &s);
+  return cnt;
+       }
+
+       //*EnD
+       
+       
+       
+       
+       
+       
+       //*****************************Subscriber
+       /* ESP8266 AWS IoT
+ *  
+ * Simplest possible example (that I could come up with) of using an ESP8266 with AWS IoT.
+ * No messing with openssl or spiffs just regular pubsub and certificates in string constants
+ * 
+ * Note: For this to work you do need to do this:
+ *       https://github.com/esp8266/Arduino/issues/3944
+ *
+ * Author: Anthony Elder 
+ * License: Apache License v2
+ */
+#include <ESP8266WiFi.h>
+#include <PubSubClient.h>
+extern "C" {
+#include "libb64/cdecode.h"
+}
+
+const char* ssid = "Bhupendra";
+const char* password = "12345678";
+const char* awsEndpoint = "a22p71xzpwvplk-ats.iot.us-west-2.amazonaws.com";
+const String Dev_Certificate = \
+//-----BEGIN CERTIFICATE-----
+"MIIDWTCCAkGgAwIBAgIUPHqqsBKlQye9B1UPDH4XR0aq7BAwDQYJKoZIhvcNAQEL" \
+"BQAwTTFLMEkGA1UECwxCQW1hem9uIFdlYiBTZXJ2aWNlcyBPPUFtYXpvbi5jb20g" \
+"SW5jLiBMPVNlYXR0bGUgU1Q9V2FzaGluZ3RvbiBDPVVTMB4XDTE4MTEwNzA3MzQ1" \
+"MFoXDTQ5MTIzMTIzNTk1OVowHjEcMBoGA1UEAwwTQVdTIElvVCBDZXJ0aWZpY2F0" \
+"ZTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAPVRovFkag3qAx8HP+0r" \
+"bWbXRR+e6nWPBfhlEQn0zHv+bdjekgZ4ecKgSRFKFwaHj1lZU9KTwKAj5MDWbEOn" \
+"y024Ucvd5/upEG7FDLB+ri2Xre7EO9O51n7/+bnFbdhdQQ2TDgFsQXRPf/JQnpGd" \
+"g0po60i2FNk/IRSFZXKUXV1364K9dsvsyexhznbtAY1HNZ51rFFbmKiPW3Bi4Tqq" \
+"QdO/5cXaBmCdWzsUhVuDXrGL7VVqNfknUCm+HFwwTF6tJR1xzn64q2kOlTnz2ARF" \
+"cSzZBnnzJFTxRO4X069ELMcnaw+tBH0Dpnr2SoozIYbJhYcvqo00z0x2YYppFWlj" \
+"UwUCAwEAAaNgMF4wHwYDVR0jBBgwFoAUMy1v03nkT4F3S5JRpu7hGsf7DIEwHQYD" \
+"VR0OBBYEFNCy6pZHJ5e2CiHEySOKUBe4TX05MAwGA1UdEwEB/wQCMAAwDgYDVR0P" \
+"AQH/BAQDAgeAMA0GCSqGSIb3DQEBCwUAA4IBAQAtmPQIXo/QheumNeMJ4pIMw5BQ" \
+"3S5W7ii+JWRk4XqoldaFxZ7+WoFa9zmFqsNizDgKb4U9DQ8NpmNfPW/SV7J8WLDW" \
+"WGmmRu4a19tnwyAZyMJjkQ8D1IDtvtTtb86l9L17Q7UBhFkhlGwMh7Cxb91t2ZRT" \
+"nL2owKjQhD5hSDkVtWbPaCvXFxMrTp2Gr31qoEEa1z5msUj2BA0KiZuOz1jHlHIX" \
+"Sag5ejDBmYQnREqsrih77XcRgElamu8HsvtcJ73ICj8Jm9zBc34uJIXuBMBdArYB" \
+"AvjaONQC6znUHsvQ+87u2GIG67Cf5ayax+exarU3NprPUTwCMl4RB+sLVwhF";
+//-----END CERTIFICATE-----
+
+const String Key_private = \
+//-----BEGIN RSA PRIVATE KEY-----
+"MIIEowIBAAKCAQEA9VGi8WRqDeoDHwc/7SttZtdFH57qdY8F+GURCfTMe/5t2N6S" \
+"Bnh5wqBJEUoXBoePWVlT0pPAoCPkwNZsQ6fLTbhRy93n+6kQbsUMsH6uLZet7sQ7" \
+"07nWfv/5ucVt2F1BDZMOAWxBdE9/8lCekZ2DSmjrSLYU2T8hFIVlcpRdXXfrgr12" \
+"y+zJ7GHOdu0BjUc1nnWsUVuYqI9bcGLhOqpB07/lxdoGYJ1bOxSFW4NesYvtVWo1" \
+"+SdQKb4cXDBMXq0lHXHOfriraQ6VOfPYBEVxLNkGefMkVPFE7hfTr0QsxydrD60E" \
+"fQOmevZKijMhhsmFhy+qjTTPTHZhimkVaWNTBQIDAQABAoIBABy4vyQWBpi0ckMa" \
+"vTBOalOlFpG6MGctJJzNcG5C/AH0avX+MQiS6GaSD5v3mbSJAI6Md9TquZ3GNg0h" \
+"zbEqHxJtZx5AT93WEHd3mKG9YzUxUgrnbL3AP03FOH64j8DKQkiNlBE0lIFCoY9E" \
+"Qxx3XZzDpfBwaQZ6bqwRZixBFKFRo09akfBNmjZib2pPBRr/xcdmMh+r7N1b9rk7" \
+"GiJz/Xkq+Llb2w3c4kYbZVUVDMeGYUHrkXJOg9OtlahimCCpDYbSHjwhkWZcLwaE" \
+"fk/025Vw9BFb4BlD/myNBIwrpawFnrkh5n7j/tvdNhph6GiXLUWsr+mmeHmYIaQ0" \
+"8TiESi0CgYEA/ylnT3WmGTlmTQ+cFrielHdYlILlW3UQJKvVLghjvk3IbPQqzqz5" \
+"bFMtEVMGiB0YMmLsKQwHOHyFRBITrVfptS14xfUR3Dg/V0nwRR8QwPV9vyeKZy8o" \
+"I1tBsMVlXsU3SR7wd5lN35lCGRZjHiXcHxDJq49psX0FXyjdK81JbVsCgYEA9h/0" \
+"dHHiHV2EK4iqUX2ERTrdpqypqwZtoOQwK1IZrOOal0TnSctUqAqllBz10ds+n1hs" \
+"p98lsXGWWizxiBBMp/WW+bdEM6a7HFmo3QxE4pXkOEOyl0Zpjeu8cWmDdcWBrHmS" \
+"5DWaBs+vY8/UUvfHVjgknezMadgYhVKL9wpATx8CgYAuSORklYK7sJ3N/LbjqDmb" \
+"1MpMpjHUlTeIb2MMJplxO8rPeLsLInVcIPpb2iOlLSHmges0xunIZU4HOwA2wWuz" \
+"Ybw2rG3A9LMIsnDTGP+BAQb+Vb3VWch+IV+ZITVyK3QL34DfMP/fP32t71GrdlKn" \
+"j/QFGs6hU3xV9qOn/mUDYQKBgAHXF1LPjys9CcHxkaRuVdDWsdWPMO2QbL1pN1r7" \
+"kCmUwhEjeL86f/WJrtc+qC/bfcpfNODEcFm1SbR+5Ydo58nRskFHt4DTXE7H9NVC" \
+"RDmVeVFaYDl1U1C2VIBck5kL0v5hIlIGfJJUdzE92o6MP7dLUCrGHHkmHnjQty8v" \
+"qm9tAoGBAJ9hq5/MI7F2FuAVurdyS5DI20+hsI4GgAlN/xtIBSvjIXo0rhYhPYFY" \
+"AZxW/rSeOgwpgNsIa07aoPEXfoExbpRwQqHXXKrFNP4HZNMqReHIbMU2iV8F+euQ" \
+"Mk8W0k81jjV/+eaweAhNEMWw+eBmm263SVkvKi2ezf8bfjykAm6Z";
+//-----END RSA PRIVATE KEY-----
+
+
+WiFiClientSecure wifi;
+
+
+void msgReceived(char* topic, byte* payload, unsigned int len); //bhupii our own fxn may be call back not dem sure
+
+PubSubClient wifi_pubsub(awsEndpoint, 8883, msgReceived, wifi); //bhupii mqtt client
+
+void setup() {
+
+
+ pinMode(0, OUTPUT);
+
+ digitalWrite(0, HIGH);
+  //********************************WIFI connection******************************
+  Serial.begin(115200); Serial.println();
+  Serial.println("ESP8266 AWS IoT Example");
+  Serial.print("Connecting to "); Serial.print(ssid);
+  WiFi.begin(ssid, password); //wifi going to start ..bhupii
+  WiFi.waitForConnectResult();
+  Serial.print(", WiFi connected, IP address: "); Serial.println(WiFi.localIP()); // wifi ke liye comman use tihis as reference
+
+    
+  //****************************DEVICE CERTIFICATE**********************************
+  int x_length=Dev_Certificate.length() * 3 / 4;
+  Serial.print("\nX length: ");Serial.print(x_length);
+  uint8_t binary_certificate_arr[Dev_Certificate.length() * 3 / 4]; // creating array of bhupii .. certificate  .
+  int len = b64decode(Dev_Certificate, binary_certificate_arr);
+  Serial.print("\nlengthx len: ");Serial.print(len);
+  wifi.setCertificate(binary_certificate_arr, len); // method fo pubsubclient.h
+
+  //******************************PRIVATE KEY**************************************
+  int k_length=Key_private.length() * 3 / 4;
+  Serial.print("\nk length: ");Serial.print(k_length);
+  uint8_t binaryPrivate[Key_private.length() * 3 / 4];
+  len = b64decode(Key_private, binaryPrivate);
+  Serial.print("\nlength in y len: ");Serial.print(len);
+  wifi.setPrivateKey(binaryPrivate, len);
+}
+
+unsigned long lastPublish;
+int msgCount;
+void loop() {
+
+  pubSubCheckConnect();
+
+  if (millis() - lastPublish > 10000) {
+    lastPublish = millis();
+  }
+}
+
+
+//**********************************Fxns defination*****************************************************
+//void callback(const char[] topic, byte* payload, unsigned int length)
+void msgReceived(char* topic, byte* payload, unsigned int length) {
+  for (int i = 0; i < length; i++) {
+   Serial.print((char)payload[i]);
+
+   if ((char)payload[i]=='F')
+   {
+    Serial.println("AlErt.................");
+     digitalWrite(0, LOW);
+     delay(8000); 
+    }
+    digitalWrite(0, HIGH);
+   }
+}
+//**********
+void pubSubCheckConnect() {
+  if ( ! wifi_pubsub.connected()) {
+    Serial.print("wifi_pubsub connecting to: "); Serial.print(awsEndpoint);
+    while ( ! wifi_pubsub.connected()) {
+      Serial.print(".");
+      wifi_pubsub.connect("arn:aws:iot:us-west-2:956751959231:thing/esp8266_first");
+    }
+    Serial.println(" connected");
+    wifi_pubsub.subscribe("my_esp8266_policy");// subscribe to a topic
+  
+  }
+  wifi_pubsub.loop();
+}
+//*********
+
+int b64decode(String b64Text, uint8_t* output) {
+  base64_decodestate s;
+  base64_init_decodestate(&s);
+  int cnt = base64_decode_block(b64Text.c_str(), b64Text.length(), (char*)output, &s);
+  return cnt;
+       }
+
+       //*EnD
+       
